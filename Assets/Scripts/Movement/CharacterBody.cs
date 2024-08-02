@@ -1,59 +1,57 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
-namespace Movement
+[RequireComponent(typeof(Rigidbody))]
+public class CharacterBody : MonoBehaviour
 {
-    [RequireComponent(typeof(Rigidbody))]
-    public class CharacterBody : MonoBehaviour
+    [SerializeField] private Rigidbody rb;
+    [SerializeField] private float jumpForce;
+    [SerializeField] private float walkSpeed;
+    [SerializeField] private float secondsToMaxSpeed;
+    [SerializeField] private float secondsToStandStill;
+    [SerializeField] private float turnResistance;
+
+    private Jump jump;
+
+    private Displacement displacement;
+    private float currentSpeed;
+    private float maxSpeed;
+    private Vector3 inputDirection;
+    private Vector3 previousDirection = Vector3.zero;
+    private Coroutine accelerationCoroutine;
+
+    private void Awake()
     {
-        [SerializeField] private float maxSprintSpeed = 7.0f;
-        [SerializeField] private float maxSpeed = 5.0f;
-        [Tooltip("How many seconds it takes to reach Max Speed")]
-        [SerializeField] private float acceleration = 5.0f;
-        [Tooltip("How many seconds it takes to go from Max Speed to 0")]
-        [SerializeField] private float deceleration = 5.0f;
+        jump = new Jump(rb, jumpForce);
+        displacement = new Displacement(secondsToMaxSpeed, secondsToStandStill, turnResistance);
+        maxSpeed = walkSpeed;
+    }
 
-        private Rigidbody rb;
-        private Displacement displacement;
+    private void FixedUpdate()
+    {
+        currentSpeed = Mathf.SmoothStep(0, maxSpeed, displacement.GetSpeedPercentage());
+        rb.velocity = inputDirection * currentSpeed;
+    }
 
-        private void Awake()
-        {
-            rb = GetComponent<Rigidbody>();
-            if (rb == null)
-            {
-                Debug.LogError("Rigidbody component not found!");
-                return;
-            }
+    public void Jump()
+    {
+        if (jump != null) { jump.PerformJump(); }        
+    }
 
-            displacement = new Displacement(rb, acceleration, deceleration, this);
-        }
+    public void Locomote(Vector3 inputDirection)
+    {
+        this.inputDirection = inputDirection;
+        displacement.ApplyTurnDamping(previousDirection, inputDirection);
+        previousDirection = inputDirection;
 
-        private void FixedUpdate()
-        {
-            rb.velocity = displacement.CurrentMovement * Mathf.Lerp(0, maxSpeed, displacement.SpeedLerpValue);
-        }
+        if (accelerationCoroutine != null) { StopCoroutine(accelerationCoroutine); }
+        accelerationCoroutine = StartCoroutine(displacement.Accelerate(true));
+    }
 
-        private void OnValidate()
-        {
-            if (displacement != null)
-            {
-                displacement.SetAcceleration(acceleration);
-                displacement.SetDeceleration(deceleration);
-            }
-        }
-
-        public void Move(Vector3 movementVector)
-        {
-            displacement.Move(movementVector);
-        }
-
-        public void Accelerate()
-        {
-            displacement.Accelerate();
-        }
-
-        public void Decelerate()
-        {
-            displacement.Decelerate();
-        }
+    public void StopLocomotion()
+    {
+        if (accelerationCoroutine != null) { StopCoroutine(accelerationCoroutine); }
+        accelerationCoroutine = StartCoroutine(displacement.Accelerate(false));
     }
 }
